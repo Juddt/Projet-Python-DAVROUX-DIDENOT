@@ -1,7 +1,7 @@
 import streamlit as st #import streamlit
 import pandas as pd #import pandas
 from utils.data_loader import get_price_data, get_last_prices #import data fct
-from utils.portfolio import compute_returns, normalize_prices, compute_asset_metrics, compute_correlation, compute_portfolio_returns, compute_portfolio_value #import portfolio fct
+from utils.portfolio import compute_returns, normalize_prices, compute_asset_metrics, compute_correlation, normalize_weights, compute_portfolio_returns, compute_portfolio_value, compute_max_drawdown, compute_portfolio_metrics #import portfolio fct
 
 #set default tickers for quant b
 #input:none
@@ -19,8 +19,10 @@ def get_default_tickers() -> list[str]:
 #notes:forward fill small gaps
 def clean_prices(prices: pd.DataFrame) -> pd.DataFrame:
     clean_df = prices.copy() #copy df
+
     #drop assets with no data
     clean_df = clean_df.dropna(axis=1, how="all") #drop empty cols
+
     #fill small gaps to avoid broken plots
     clean_df = clean_df.ffill() #forward fill nan
     return clean_df #return clean df
@@ -32,9 +34,11 @@ def clean_prices(prices: pd.DataFrame) -> pd.DataFrame:
 #notes:keep index in csv
 def df_to_csv_bytes(df: pd.DataFrame) -> bytes:
     csv_bytes = b"" #init bytes
+
     #check empty df case
     if df is None or df.empty:
         return csv_bytes #return empty bytes
+
     csv_str = df.to_csv(index=True) #convert to csv
     csv_bytes = csv_str.encode("utf-8") #encode bytes
     return csv_bytes #return bytes
@@ -91,24 +95,21 @@ else:
     for ticker in prices.columns:
         raw_weights[ticker] = st.slider(f"weight {ticker}", min_value=0.0, max_value=1.0, value=1.0, step=0.05) #set weight slider
 
-    total_weight = sum(raw_weights.values()) #compute total weight
-
-    #normalize weights to sum to 1
-    if total_weight > 0:
-        weights = {k: v / total_weight for k, v in raw_weights.items()} #normalize weights
-    else:
-        weights = {} #set empty weights
-
-    st.write("normalized weights", weights) #display weights
-
+    weights = normalize_weights(raw_weights) #normalize weights
     port_returns = compute_portfolio_returns(returns, weights) #compute portfolio returns
     port_value = compute_portfolio_value(port_returns, base_value) #compute portfolio value
+    port_metrics = compute_portfolio_metrics(port_returns, periods_per_year=252) #compute portfolio metrics
+    mdd = compute_max_drawdown(port_value) #compute max drawdown
 
     st.subheader("portfolio value chart") #set subtitle
     st.line_chart(port_value) #plot portfolio value
 
-    st.subheader("portfolio returns chart") #set subtitle
-    st.line_chart(port_returns) #plot portfolio returns
+    st.subheader("portfolio metrics") #set subtitle
+    c1, c2, c3, c4 = st.columns(4) #create metrics cols
+    c1.metric("ann return", f"{port_metrics.get('ann_return', 0.0) * 100:.2f}%") #show ann return
+    c2.metric("ann vol", f"{port_metrics.get('ann_vol', 0.0) * 100:.2f}%") #show ann vol
+    c3.metric("sharpe", f"{port_metrics.get('sharpe', 0.0):.2f}") #show sharpe
+    c4.metric("max drawdown", f"{mdd * 100:.2f}%") #show mdd
 
     st.subheader("export") #set subtitle
     st.download_button("download prices csv", data=df_to_csv_bytes(prices), file_name="prices.csv", mime="text/csv") #download prices
