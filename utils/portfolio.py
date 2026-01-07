@@ -1,35 +1,67 @@
-#compute portfolio returns from asset returns
-#input:returns df with tickers columns, weights dict
-#output:series of portfolio returns
-#notes:weights must sum to 1
-#notes:missing weights are ignored
-def compute_portfolio_returns(returns: pd.DataFrame, weights: dict) -> pd.Series:
-    port_returns = pd.Series(dtype=float) #init empty series
+import pandas as pd #import pandas
+
+#compute simple returns from prices
+#input:prices df with tickers columns
+#output:returns df with same columns
+#notes:use pct change on rows
+#notes:drop first nan row
+def compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
+    returns = pd.DataFrame() #init empty df
+
+    #check empty prices case
+    if prices is None or prices.empty:
+        return returns #return empty df
+
+    returns = prices.pct_change() #compute returns
+    returns = returns.dropna(how="all") #drop fully empty rows
+    return returns #return returns df
+
+#normalize prices with base value
+#input:prices df with tickers columns, base_value float
+#output:normalized df with base_value at start
+#notes:divide by first valid row
+#notes:keep df shape and cols
+def normalize_prices(prices: pd.DataFrame, base_value: float) -> pd.DataFrame:
+    norm_prices = pd.DataFrame() #init empty df
+
+    #check empty prices case
+    if prices is None or prices.empty:
+        return norm_prices #return empty df
+
+    first_row = prices.iloc[0] #take first row
+    norm_prices = prices.divide(first_row) #normalize by first row
+    norm_prices = norm_prices.multiply(base_value) #scale to base value
+    return norm_prices #return norm df
+
+#compute basic metrics for each asset
+#input:returns df with tickers columns
+#output:metrics df with columns mean_return and vol
+#notes:mean is average return per step
+#notes:vol is std of returns
+def compute_asset_metrics(returns: pd.DataFrame) -> pd.DataFrame:
+    metrics = pd.DataFrame() #init empty df
 
     #check empty returns case
     if returns is None or returns.empty:
-        return port_returns #return empty series
+        return metrics #return empty df
 
-    #align weights with returns columns
-    common_assets = [col for col in returns.columns if col in weights] #get common assets
-    if len(common_assets) == 0:
-        return port_returns #return empty series
+    metrics = pd.DataFrame(index=returns.columns) #init metrics df
+    metrics["mean_return"] = returns.mean() #compute mean return
+    metrics["vol"] = returns.std() #compute vol
+    return metrics #return metrics df
 
-    weighted_returns = returns[common_assets].multiply(pd.Series(weights), axis=1) #apply weights
-    port_returns = weighted_returns.sum(axis=1) #sum weighted returns
-    return port_returns #return portfolio returns
-
-#compute portfolio value from returns
-#input:portfolio returns series, base_value float
-#output:series of portfolio value
-#notes:use cumulative product
-#notes:start at base value
-def compute_portfolio_value(port_returns: pd.Series, base_value: float) -> pd.Series:
-    port_value = pd.Series(dtype=float) #init empty series
+#compute correlation matrix of returns
+#input:returns df with tickers columns
+#output:corr df
+#notes:use pandas corr
+#notes:drop fully empty cols
+def compute_correlation(returns: pd.DataFrame) -> pd.DataFrame:
+    corr = pd.DataFrame() #init empty df
 
     #check empty returns case
-    if port_returns is None or port_returns.empty:
-        return port_value #return empty series
+    if returns is None or returns.empty:
+        return corr #return empty df
 
-    port_value = (1 + port_returns).cumprod() * base_value #compute portfolio value
-    return port_value #return portfolio value
+    clean_returns = returns.dropna(axis=1, how="all") #drop empty cols
+    corr = clean_returns.corr() #compute corr
+    return corr #return corr df
