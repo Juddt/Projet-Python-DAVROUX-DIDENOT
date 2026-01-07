@@ -5,13 +5,13 @@ import yfinance as yf #import yfinance
 #input:tickers list, period str, interval str
 #output:prices df with datetime index and tickers columns
 #notes:use auto adjust and keep close only
-#notes:handle yfinance multiindex and single ticker
+#notes:disable threads to avoid yfinance cache lock
 def get_price_data(tickers: list[str], period: str, interval: str) -> pd.DataFrame:
     prices = pd.DataFrame() #init empty df
 
     #download market data from yfinance
     try:
-        data = yf.download(tickers=tickers, period=period, interval=interval, auto_adjust=True, progress=False, threads=True) #download data
+        data = yf.download(tickers=tickers, period=period, interval=interval, auto_adjust=True, progress=False, threads=False) #download data
     except Exception:
         return prices #return empty df
 
