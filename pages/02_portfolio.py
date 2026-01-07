@@ -11,6 +11,21 @@ def get_default_tickers() -> list[str]:
     tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "META"] #set default tickers
     return tickers #return tickers list
 
+#clean prices df for display
+#input:prices df
+#output:cleaned prices df
+#notes:drop fully empty cols
+#notes:forward fill small gaps
+def clean_prices(prices: pd.DataFrame) -> pd.DataFrame:
+    clean_df = prices.copy() #copy df
+
+    #drop assets with no data
+    clean_df = clean_df.dropna(axis=1, how="all") #drop empty cols
+
+    #fill small gaps to avoid broken plots
+    clean_df = clean_df.ffill() #forward fill nan
+    return clean_df #return clean df
+
 st.set_page_config(page_title="portfolio", layout="wide") #set page config
 st.title("portfolio multi assets") #set page title
 
@@ -33,10 +48,14 @@ if load_data:
 if prices is None or prices.empty:
     st.info("click load data to download prices") #show info
 else:
+    prices = clean_prices(prices) #clean prices df
     last_prices = get_last_prices(prices) #get last prices
 
     st.subheader("last prices") #set subtitle
     st.dataframe(last_prices) #show last prices
 
-    st.subheader("close prices") #set subtitle
+    st.subheader("close prices chart") #set subtitle
+    st.line_chart(prices) #plot prices
+
+    st.subheader("close prices table") #set subtitle
     st.dataframe(prices.tail(20)) #show last rows
