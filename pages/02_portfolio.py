@@ -36,7 +36,6 @@ interval = st.selectbox("interval", options=["1d", "1wk", "1mo"]) #select interv
 
 #load prices when user clicks
 load_data = st.button("load data") #set load button
-
 prices = pd.DataFrame() #init prices df
 
 #check if user wants to load data
