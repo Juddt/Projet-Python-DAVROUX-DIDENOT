@@ -1,7 +1,7 @@
 import streamlit as st #import streamlit
 import pandas as pd #import pandas
 from utils.data_loader import get_price_data, get_last_prices #import data fct
-from utils.portfolio import compute_returns, normalize_prices, compute_asset_metrics, compute_correlation, normalize_weights, compute_portfolio_returns, compute_portfolio_value, compute_max_drawdown, compute_portfolio_metrics #import portfolio fct
+from utils.portfolio import compute_returns, normalize_prices, compute_asset_metrics, compute_correlation, normalize_weights, compute_max_drawdown, compute_portfolio_metrics, compute_rebalanced_portfolio #import portfolio fct
 
 #set default tickers for quant b
 #input:none
@@ -48,9 +48,10 @@ st.title("portfolio multi assets") #set page title
 
 default_tickers = get_default_tickers() #get default tickers
 selected_tickers = st.multiselect("tickers", options=default_tickers, default=default_tickers) #select tickers
-period = st.selectbox("period", options=["1mo", "3mo", "6mo", "1y", "2y", "5y"]) #select period
-interval = st.selectbox("interval", options=["1d", "1wk", "1mo"]) #select interval
+period = st.selectbox("period", options=["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=2) #select period
+interval = st.selectbox("interval", options=["1d", "1wk", "1mo"], index=0) #select interval
 base_value = st.number_input("base value", min_value=10.0, max_value=1000.0, value=100.0, step=10.0) #set base value
+rebalance_freq = st.selectbox("rebalance", options=["D", "W", "M"], index=1) #select rebalance freq
 
 #load prices when user clicks
 load_data = st.button("load data") #set load button
@@ -96,8 +97,7 @@ else:
         raw_weights[ticker] = st.slider(f"weight {ticker}", min_value=0.0, max_value=1.0, value=1.0, step=0.05) #set weight slider
 
     weights = normalize_weights(raw_weights) #normalize weights
-    port_returns = compute_portfolio_returns(returns, weights) #compute portfolio returns
-    port_value = compute_portfolio_value(port_returns, base_value) #compute portfolio value
+    port_value, port_returns = compute_rebalanced_portfolio(returns, weights, rebalance_freq=rebalance_freq, base_value=base_value) #compute portfolio
     port_metrics = compute_portfolio_metrics(port_returns, periods_per_year=252) #compute portfolio metrics
     mdd = compute_max_drawdown(port_value) #compute max drawdown
 
