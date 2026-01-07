@@ -1,7 +1,7 @@
 import streamlit as st #import streamlit
 import pandas as pd #import pandas
 from utils.data_loader import get_price_data, get_last_prices #import data fct
-from utils.portfolio import compute_returns, normalize_prices, compute_asset_metrics #import portfolio fct
+from utils.portfolio import compute_returns, normalize_prices, compute_asset_metrics, compute_correlation, compute_portfolio_returns, compute_portfolio_value #import portfolio fct
 
 #set default tickers for quant b
 #input:none
@@ -19,13 +19,25 @@ def get_default_tickers() -> list[str]:
 #notes:forward fill small gaps
 def clean_prices(prices: pd.DataFrame) -> pd.DataFrame:
     clean_df = prices.copy() #copy df
-
     #drop assets with no data
     clean_df = clean_df.dropna(axis=1, how="all") #drop empty cols
-
     #fill small gaps to avoid broken plots
     clean_df = clean_df.ffill() #forward fill nan
     return clean_df #return clean df
+
+#convert df to csv bytes for download
+#input:df
+#output:bytes csv
+#notes:use utf8 encoding
+#notes:keep index in csv
+def df_to_csv_bytes(df: pd.DataFrame) -> bytes:
+    csv_bytes = b"" #init bytes
+    #check empty df case
+    if df is None or df.empty:
+        return csv_bytes #return empty bytes
+    csv_str = df.to_csv(index=True) #convert to csv
+    csv_bytes = csv_str.encode("utf-8") #encode bytes
+    return csv_bytes #return bytes
 
 st.set_page_config(page_title="portfolio", layout="wide") #set page config
 st.title("portfolio multi assets") #set page title
@@ -55,6 +67,7 @@ else:
     returns = compute_returns(prices) #compute returns
     norm_prices = normalize_prices(prices, base_value=base_value) #compute normalized prices
     metrics = compute_asset_metrics(returns) #compute asset metrics
+    corr = compute_correlation(returns) #compute corr matrix
 
     st.subheader("last prices") #set subtitle
     st.dataframe(last_prices) #show last prices
@@ -68,12 +81,10 @@ else:
     st.subheader("asset metrics") #set subtitle
     st.dataframe(metrics) #show metrics table
 
-    st.subheader("close prices table") #set subtitle
-    st.dataframe(prices.tail(20)) #show last rows
-
+    st.subheader("correlation matrix") #set subtitle
+    st.dataframe(corr) #show corr df
 
     st.subheader("portfolio weights") #set subtitle
-
     raw_weights = {} #init raw weights dict
 
     #create sliders for each asset
@@ -86,7 +97,7 @@ else:
     if total_weight > 0:
         weights = {k: v / total_weight for k, v in raw_weights.items()} #normalize weights
     else:
-        weights = {} #empty weights
+        weights = {} #set empty weights
 
     st.write("normalized weights", weights) #display weights
 
@@ -98,3 +109,11 @@ else:
 
     st.subheader("portfolio returns chart") #set subtitle
     st.line_chart(port_returns) #plot portfolio returns
+
+    st.subheader("export") #set subtitle
+    st.download_button("download prices csv", data=df_to_csv_bytes(prices), file_name="prices.csv", mime="text/csv") #download prices
+    st.download_button("download returns csv", data=df_to_csv_bytes(returns), file_name="returns.csv", mime="text/csv") #download returns
+    st.download_button("download corr csv", data=df_to_csv_bytes(corr), file_name="correlation.csv", mime="text/csv") #download corr
+
+    st.subheader("close prices table") #set subtitle
+    st.dataframe(prices.tail(20)) #show last rows
