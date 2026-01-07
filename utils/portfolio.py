@@ -166,3 +166,57 @@ def compute_portfolio_metrics(port_returns: pd.Series, periods_per_year: int) ->
     sharpe = (ann_return / ann_vol) if ann_vol > 0 else float("nan") #compute sharpe
     metrics = {"ann_return": ann_return, "ann_vol": ann_vol, "sharpe": sharpe} #set metrics dict
     return metrics #return metrics
+
+#simulate portfolio with drift and rebalancing
+#input:returns df, weights dict, rebalance freq str, base_value float
+#output:tuple value series and returns series
+#notes:allocations drift with asset returns
+#notes:rebalance reset allocations at each new period
+def compute_rebalanced_portfolio(returns: pd.DataFrame, weights: dict, rebalance_freq: str, base_value: float) -> tuple[pd.Series, pd.Series]:
+    port_value = pd.Series(dtype=float) #init value series
+    port_returns = pd.Series(dtype=float) #init returns series
+
+    #check empty returns case
+    if returns is None or returns.empty:
+        return port_value, port_returns #return empty
+
+    common_assets = [col for col in returns.columns if col in weights] #get common assets
+
+    #check if we have at least one asset
+    if len(common_assets) == 0:
+        return port_value, port_returns #return empty
+
+    work = returns[common_assets].copy() #copy returns
+    w = pd.Series({k: float(weights[k]) for k in common_assets}) #build weight series
+    w_sum = float(w.sum()) #compute sum
+
+    #check weight sum
+    if w_sum <= 0:
+        return port_value, port_returns #return empty
+
+    w = w / w_sum #normalize weights
+    groups = work.index.to_period(rebalance_freq) #build rebalance groups
+    alloc = (w * float(base_value)).to_numpy(dtype=float) #init allocations
+    prev_value = float(base_value) #init prev value
+    values = [] #init values list
+    rets = [] #init returns list
+
+    #loop on each time step for simulation
+    for i in range(len(work.index)):
+        current_period = groups[i] #get period
+        if i == 0:
+            last_period = current_period #init last period
+        if current_period != last_period:
+            alloc = (w * prev_value).to_numpy(dtype=float) #rebalance allocations
+            last_period = current_period #update last period
+        row = work.iloc[i].to_numpy(dtype=float) #get returns row
+        alloc = alloc * (1.0 + row) #update allocations
+        value = float(np.sum(alloc)) #compute total value
+        r = (value / prev_value) - 1.0 #compute step return
+        prev_value = value #update prev value
+        values.append(value) #store value
+        rets.append(r) #store return
+
+    port_value = pd.Series(values, index=work.index, name="portfolio_value") #build value series
+    port_returns = pd.Series(rets, index=work.index, name="portfolio_returns") #build returns series
+    return port_value, port_returns #return series
