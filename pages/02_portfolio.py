@@ -70,3 +70,31 @@ else:
 
     st.subheader("close prices table") #set subtitle
     st.dataframe(prices.tail(20)) #show last rows
+
+
+    st.subheader("portfolio weights") #set subtitle
+
+    raw_weights = {} #init raw weights dict
+
+    #create sliders for each asset
+    for ticker in prices.columns:
+        raw_weights[ticker] = st.slider(f"weight {ticker}", min_value=0.0, max_value=1.0, value=1.0, step=0.05) #set weight slider
+
+    total_weight = sum(raw_weights.values()) #compute total weight
+
+    #normalize weights to sum to 1
+    if total_weight > 0:
+        weights = {k: v / total_weight for k, v in raw_weights.items()} #normalize weights
+    else:
+        weights = {} #empty weights
+
+    st.write("normalized weights", weights) #display weights
+
+    port_returns = compute_portfolio_returns(returns, weights) #compute portfolio returns
+    port_value = compute_portfolio_value(port_returns, base_value) #compute portfolio value
+
+    st.subheader("portfolio value chart") #set subtitle
+    st.line_chart(port_value) #plot portfolio value
+
+    st.subheader("portfolio returns chart") #set subtitle
+    st.line_chart(port_returns) #plot portfolio returns
