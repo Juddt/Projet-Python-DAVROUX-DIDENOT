@@ -1,7 +1,18 @@
 import streamlit as st #import streamlit
 import pandas as pd #import pandas
+from datetime import datetime #import datetime
 from utils.data_loader import get_price_data, get_last_prices #import data fct
 from utils.portfolio import compute_returns, normalize_prices, compute_asset_metrics, compute_correlation, normalize_weights, compute_max_drawdown, compute_portfolio_metrics, compute_rebalanced_portfolio #import portfolio fct
+
+#cache prices download for 5 min
+#input:tickers tuple, period str, interval str
+#output:prices df
+#notes:ttl 300 sec for refresh rule
+#notes:convert tuple to list for yfinance
+@st.cache_data(ttl=300)
+def get_cached_price_data(tickers: tuple, period: str, interval: str) -> pd.DataFrame:
+    prices = get_price_data(list(tickers), period=period, interval=interval) #download prices
+    return prices #return prices df
 
 #set default tickers for quant b
 #input:none
@@ -19,10 +30,8 @@ def get_default_tickers() -> list[str]:
 #notes:forward fill small gaps
 def clean_prices(prices: pd.DataFrame) -> pd.DataFrame:
     clean_df = prices.copy() #copy df
-
     #drop assets with no data
     clean_df = clean_df.dropna(axis=1, how="all") #drop empty cols
-
     #fill small gaps to avoid broken plots
     clean_df = clean_df.ffill() #forward fill nan
     return clean_df #return clean df
@@ -34,16 +43,15 @@ def clean_prices(prices: pd.DataFrame) -> pd.DataFrame:
 #notes:keep index in csv
 def df_to_csv_bytes(df: pd.DataFrame) -> bytes:
     csv_bytes = b"" #init bytes
-
     #check empty df case
     if df is None or df.empty:
         return csv_bytes #return empty bytes
-
     csv_str = df.to_csv(index=True) #convert to csv
     csv_bytes = csv_str.encode("utf-8") #encode bytes
     return csv_bytes #return bytes
 
 st.set_page_config(page_title="portfolio", layout="wide") #set page config
+st.markdown("<meta http-equiv='refresh' content='300'>", unsafe_allow_html=True) #auto refresh page 5 min
 st.title("portfolio multi assets") #set page title
 
 default_tickers = get_default_tickers() #get default tickers
@@ -53,19 +61,16 @@ interval = st.selectbox("interval", options=["1d", "1wk", "1mo"], index=0) #sele
 base_value = st.number_input("base value", min_value=10.0, max_value=1000.0, value=100.0, step=10.0) #set base value
 rebalance_freq = st.selectbox("rebalance", options=["D", "W", "M"], index=1) #select rebalance freq
 
-#load prices when user clicks
-load_data = st.button("load data") #set load button
-
+tickers_tuple = tuple(selected_tickers) #build hashable tickers
 prices = pd.DataFrame() #init prices df
 
-#check if user wants to load data
-if load_data:
-    #download close prices for selected tickers
-    prices = get_price_data(selected_tickers, period=period, interval=interval) #get prices df
+#download prices automatically when tickers not empty
+if len(tickers_tuple) > 0:
+    prices = get_cached_price_data(tickers_tuple, period=period, interval=interval) #get cached prices
 
 #check if we have prices to display
 if prices is None or prices.empty:
-    st.info("click load data to download prices") #show info
+    st.warning("no data, try another period or interval") #show warning
 else:
     prices = clean_prices(prices) #clean prices df
     last_prices = get_last_prices(prices) #get last prices
@@ -74,20 +79,10 @@ else:
     metrics = compute_asset_metrics(returns) #compute asset metrics
     corr = compute_correlation(returns) #compute corr matrix
 
-    st.subheader("last prices") #set subtitle
+    st.caption("last refresh: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S")) #show refresh time
+
+    st.subheader("current values") #set subtitle
     st.dataframe(last_prices) #show last prices
-
-    st.subheader("normalized prices chart") #set subtitle
-    st.line_chart(norm_prices) #plot normalized prices
-
-    st.subheader("returns chart") #set subtitle
-    st.line_chart(returns) #plot returns
-
-    st.subheader("asset metrics") #set subtitle
-    st.dataframe(metrics) #show metrics table
-
-    st.subheader("correlation matrix") #set subtitle
-    st.dataframe(corr) #show corr df
 
     st.subheader("portfolio weights") #set subtitle
     raw_weights = {} #init raw weights dict
@@ -101,8 +96,14 @@ else:
     port_metrics = compute_portfolio_metrics(port_returns, periods_per_year=252) #compute portfolio metrics
     mdd = compute_max_drawdown(port_value) #compute max drawdown
 
-    st.subheader("portfolio value chart") #set subtitle
-    st.line_chart(port_value) #plot portfolio value
+    st.subheader("main chart prices + portfolio") #set subtitle
+    chart_df = norm_prices.copy() #copy norm prices
+
+    #add portfolio curve to main chart
+    if port_value is not None and (not port_value.empty):
+        chart_df["portfolio"] = port_value #add portfolio curve
+
+    st.line_chart(chart_df) #plot main chart
 
     st.subheader("portfolio metrics") #set subtitle
     c1, c2, c3, c4 = st.columns(4) #create metrics cols
@@ -110,6 +111,15 @@ else:
     c2.metric("ann vol", f"{port_metrics.get('ann_vol', 0.0) * 100:.2f}%") #show ann vol
     c3.metric("sharpe", f"{port_metrics.get('sharpe', 0.0):.2f}") #show sharpe
     c4.metric("max drawdown", f"{mdd * 100:.2f}%") #show mdd
+
+    st.subheader("returns chart") #set subtitle
+    st.line_chart(returns) #plot returns
+
+    st.subheader("asset metrics") #set subtitle
+    st.dataframe(metrics) #show metrics table
+
+    st.subheader("correlation matrix") #set subtitle
+    st.dataframe(corr) #show corr df
 
     st.subheader("export") #set subtitle
     st.download_button("download prices csv", data=df_to_csv_bytes(prices), file_name="prices.csv", mime="text/csv") #download prices
