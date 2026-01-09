@@ -1,0 +1,7 @@
+open app with streamlit
+left menu shows pages
+01_quant_a is single asset module
+02_portfolio is quant b module
+
+refresh is automatic each 5 minutes
+data is cached 5 minutes to avoid spam
