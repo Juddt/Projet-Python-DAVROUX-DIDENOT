@@ -1,0 +1,15 @@
+run daily report at 20:00 on linux vm
+go in repo folder
+example path: /home/user/Projet-Python-DAVROUX-DIDENOT
+
+1)check python and deps
+python -m pip install -r requirements.txt
+
+2)test report manual
+python -m scripts.daily_report
+
+3)edit crontab
+crontab -e
+
+4)add this line
+0 20 * * * cd /home/user/Projet-Python-DAVROUX-DIDENOT && python -m scripts.daily_report >> reports/cron.log 2>&1
